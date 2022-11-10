@@ -1,5 +1,5 @@
 import asyncio
-
+import re
 from aiohttp import web
 from db import setup_db
 from bson import ObjectId
@@ -19,25 +19,29 @@ async def shut_url_get(request):
 </form>"""
     return web.Response(text=form_request, content_type='text/html')
 
+
 async def shut_url_post(request):
     result = await request.text()
     user_url = result.replace('user_url=', '')
+    user_url_list = user_url.split('://')
     db = request.app["db"]
     collec = db['urls']
-    url_record = await collec.insert_one({'user_url': user_url})
+    url_record = await collec.insert_one({'user_url': user_url_list[1], 'prefix': user_url_list[0]})
     return web.Response (text=str(url_record.inserted_id))
+
 
 async def find_url(request):
     name = request.match_info.get('name')
     db = request.app["db"]
     collec = db["urls"]
     try:
-        find_url = await collec.find_one({"_id": ObjectId(name)})
-        select_url = find_url['user_url']
+        object_url = await collec.find_one({"_id": ObjectId(name)})
+        prefix = object_url.get('prefix', 'http')
+        url = object_url['user_url']
     except BaseException:
         return web.Response(text="Url not found")
 
-    raise web.HTTPFound("http://"+select_url)
+    raise web.HTTPFound(prefix + "://" + url)
 
 
 db = asyncio.run(setup_db())
